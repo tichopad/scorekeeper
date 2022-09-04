@@ -1,0 +1,20 @@
+http://localhost {
+  reverse_proxy app:3000
+}
+
+localhost:8002 {
+  @websockets {
+    header Connection *Upgrade*
+    header Upgrade    websocket
+  }
+
+  # How to fucking forward WS??!!
+  reverse_proxy @websockets app:8002
+}
+
+
+
+# TODO: Add BasicAuth
+http://localhost/chinchilla {
+  reverse_proxy adminer:8080
+}

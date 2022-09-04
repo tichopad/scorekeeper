@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./infrastructure/app/Dockerfile
+    depends_on:
+      - db
+  reverse-proxy:
+    image: caddy:alpine
+    volumes:
+      - ./infrastructure/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+  db:
+    image: postgres:alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+  adminer:
+    image: adminer
+
+volumes:
+  caddy_data:
+    external: true
+  caddy_config:

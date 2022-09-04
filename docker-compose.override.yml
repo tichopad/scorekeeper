@@ -1,0 +1,12 @@
+services:
+  app:
+    command: pnpm run dev
+    volumes:
+      - ./app:/usr/src/scorekeeper/app
+      - ./remix.config.js:/usr/src/scorekeeper/app/remix.config.js
+  reverse-proxy:
+    ports:
+      - "3000:80"
+  db:
+    ports:
+      - "5432:5432"
