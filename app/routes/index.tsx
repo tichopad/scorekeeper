@@ -1,32 +1,23 @@
+import { json } from "@remix-run/cloudflare";
+import { useLoaderData } from "@remix-run/react";
+import Leaderboard from "~/components/Leaderboard";
+import { getAllGamesWithTopFiveLeaderboards } from "~/repositories/leaderboards";
+
+export const loader = async () => {
+  return json({
+    gamesWithTopFiveLeaderboards: await getAllGamesWithTopFiveLeaderboards(),
+  });
+};
+
 export default function Index() {
+  const { gamesWithTopFiveLeaderboards } = useLoaderData<typeof loader>();
+
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
-      <h1>Welcome to Remix</h1>
-      <ul>
-        <li>
-          <a
-            target="_blank"
-            href="https://remix.run/tutorials/blog"
-            rel="noreferrer"
-          >
-            15m Quickstart Blog Tutorials
-          </a>
-        </li>
-        <li>
-          <a
-            target="_blank"
-            href="https://remix.run/tutorials/jokes"
-            rel="noreferrer"
-          >
-            Deep Dive Jokes App Tutorial
-          </a>
-        </li>
-        <li>
-          <a target="_blank" href="https://remix.run/docs" rel="noreferrer">
-            Remix Docs
-          </a>
-        </li>
-      </ul>
-    </div>
+    <main>
+      <h1>Leaderboards</h1>
+      {gamesWithTopFiveLeaderboards.map((game) => (
+        <Leaderboard key={game.id} game={game} />
+      ))}
+    </main>
   );
 }
