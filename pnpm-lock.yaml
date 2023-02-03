@@ -2,11 +2,13 @@ lockfileVersion: 5.4
 
 specifiers:
   '@cloudflare/workers-types': 4.20230115.0
+  '@faker-js/faker': 7.6.0
   '@remix-run/cloudflare': 1.12.0
   '@remix-run/cloudflare-workers': 1.12.0
   '@remix-run/dev': 1.12.0
   '@remix-run/eslint-config': 1.12.0
   '@remix-run/react': 1.12.0
+  '@types/node': 18.11.18
   '@types/react': 18.0.27
   '@types/react-dom': 18.0.10
   cross-env: 7.0.3
@@ -28,8 +30,10 @@ dependencies:
 
 devDependencies:
   '@cloudflare/workers-types': 4.20230115.0
+  '@faker-js/faker': 7.6.0
   '@remix-run/dev': 1.12.0
   '@remix-run/eslint-config': 1.12.0_6phwajf43xwwgpkdgjffawkphy
+  '@types/node': 18.11.18
   '@types/react': 18.0.27
   '@types/react-dom': 18.0.10
   eslint: 8.33.0
@@ -1571,6 +1575,11 @@ packages:
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
       - supports-color
+    dev: true
+
+  /@faker-js/faker/7.6.0:
+    resolution: {integrity: sha512-XK6BTq1NDMo9Xqw/YkYyGjSsg44fbNwYRx7QK2CuoQgyy+f1rrTDHoExVM5PsyXCtfl2vs2vVJ0MN0yN6LppRw==}
+    engines: {node: '>=14.0.0', npm: '>=6.0.0'}
     dev: true
 
   /@gar/promisify/1.1.3:
