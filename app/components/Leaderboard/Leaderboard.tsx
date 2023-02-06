@@ -25,7 +25,7 @@ export default function Leaderboard({
         </thead>
         <tbody>
           {leaderboard.map((entry) => (
-            <Row key={id + entry.player.id} {...entry} />
+            <Row key={id + entry.player.id} gameId={id} {...entry} />
           ))}
           {hasMorePlayers ? <More gameId={id} /> : null}
         </tbody>
