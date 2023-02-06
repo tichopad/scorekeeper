@@ -1,12 +1,14 @@
-name = "remix-cloudflare-workers"
+name = "scorekeeper"
 
 workers_dev = true
 main = "./build/index.js"
 # https://developers.cloudflare.com/workers/platform/compatibility-dates
 compatibility_date = "2022-04-05"
 
+kv_namespaces = [{ binding = "STORE", id = "ae5c3a308ff04545b8d9c920ead4463e" }]
+
 [site]
-  bucket = "./public"
+bucket = "./public"
 
 [build]
-  command = "npm run build"
+command = "pnpm run build"

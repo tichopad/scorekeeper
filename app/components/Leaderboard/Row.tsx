@@ -1,4 +1,4 @@
-import type { Game } from "~/repositories/leaderboards";
+import type { Game } from "~/repositories/leaderboards.server";
 
 type Props = Game["leaderboard"][number];
 

@@ -1,14 +1,20 @@
-import type { Game } from "~/repositories/leaderboards";
+import { Link } from "@remix-run/react";
+import type { Game } from "~/repositories/leaderboards.server";
 import Row from "./Row";
 
-type Props = {
-  game: Game;
+type Props = Game & {
+  hasMorePlayers: boolean;
 };
 
-export default function Leaderboard({ game }: Props) {
+export default function Leaderboard({
+  id,
+  hasMorePlayers,
+  leaderboard,
+  name,
+}: Props) {
   return (
     <article>
-      <h2>{game.name}</h2>
+      <h2><Link to={`/game/${id}`}>{name}</Link></h2>
       <table>
         <thead>
           <tr>
@@ -18,11 +24,26 @@ export default function Leaderboard({ game }: Props) {
           </tr>
         </thead>
         <tbody>
-          {game.leaderboard.map((entry) => (
-            <Row key={game.id + entry.player.id} {...entry} />
+          {leaderboard.map((entry) => (
+            <Row key={id + entry.player.id} {...entry} />
           ))}
+          {hasMorePlayers ? <More gameId={id} /> : null}
         </tbody>
       </table>
     </article>
+  );
+}
+
+type MoreProps = {
+  gameId: string;
+};
+
+function More({ gameId }: MoreProps) {
+  return (
+    <tr>
+      <td colSpan={3}>
+        <Link to={`/game/${gameId}`}>More</Link>
+      </td>
+    </tr>
   );
 }
