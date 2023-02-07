@@ -1,5 +1,6 @@
 import hyperId from "hyperid";
-import fakeGames from "./games.json";
+import { slugify } from "~/utils";
+import fakeGames from "./games";
 
 const seedStore = async () => {
   await STORE.put("games", JSON.stringify(fakeGames));
@@ -21,6 +22,7 @@ type LeaderboardEntry = {
 
 export type Game = {
   name: string;
+  slug: string;
   id: GameID;
   leaderboard: Array<LeaderboardEntry>;
 };
@@ -28,6 +30,7 @@ export type Game = {
 function readGamesFromStore() {
   return STORE.get("games").then((value) => value && JSON.parse(value));
 }
+
 async function loadGames() {
   const games = await readGamesFromStore();
   if (games) {
@@ -43,9 +46,14 @@ export function getAllGames(): Promise<Array<Game>> {
   return loadGames();
 }
 
-export async function getGame(id: string): Promise<Game | null> {
+export async function getGame(name: string): Promise<Game | null> {
   const games = await getAllGames();
-  return games.find((game) => game.id === id) ?? null;
+  return games.find((game) => game.name === name) ?? null;
+}
+
+export async function getGameBySlug(slug: string): Promise<Game | null> {
+  const games = await getAllGames();
+  return games.find((game) => game.slug === slug) ?? null;
 }
 
 export async function createGame(name: string): Promise<Game> {
@@ -53,6 +61,7 @@ export async function createGame(name: string): Promise<Game> {
   const newGame: Game = {
     id: generateId(),
     name,
+    slug: slugify(name),
     leaderboard: [],
   };
   const games = await loadGames();
