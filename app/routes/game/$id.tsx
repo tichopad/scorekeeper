@@ -1,12 +1,12 @@
 import { json, type LoaderArgs } from "@remix-run/cloudflare";
 import { useLoaderData } from "@remix-run/react";
 import Leaderboard from "~/components/Leaderboard";
-import { getGameBySlug } from "~/repositories/leaderboards.server";
+import { getGame } from "~/repositories/leaderboards.server";
 import { assert } from "~/utils";
 
 export const loader = async ({ params }: LoaderArgs) => {
-  assert(params.slug, "No game slug provided");
-  const game = await getGameBySlug(params.slug);
+  assert(params.id, "No game id provided");
+  const game = await getGame(params.id);
 
   if (game === null) {
     throw new Response("Not Found", {

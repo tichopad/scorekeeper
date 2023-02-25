@@ -12,3 +12,6 @@ bucket = "./public"
 
 [build]
 command = "pnpm run build"
+
+[miniflare]
+kv_persist = true

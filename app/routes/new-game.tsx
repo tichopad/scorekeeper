@@ -1,7 +1,8 @@
-import { redirect, type ActionArgs } from "@remix-run/cloudflare";
+import { json, redirect, type ActionArgs } from "@remix-run/cloudflare";
 import { Form } from "@remix-run/react";
-import { createGame } from "~/repositories/leaderboards.server";
+import * as gamesRepository from "~/repositories/games.server";
 import { assert } from "~/utils";
+import * as E from "fp-ts/Either";
 
 export const action = async ({ request }: ActionArgs) => {
   const body = await request.formData();
@@ -10,7 +11,9 @@ export const action = async ({ request }: ActionArgs) => {
   assert(name, "Name is required for creating new game");
   assert(typeof name === "string", "Name has to be a string");
 
-  await createGame(name);
+  const newGame = await gamesRepository.put({ name });
+
+  if (E.isLeft(newGame)) return json({ errors: newGame.left.errors });
 
   return redirect("/");
 };
