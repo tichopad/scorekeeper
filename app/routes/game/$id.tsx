@@ -1,20 +1,25 @@
 import { json, type LoaderArgs } from "@remix-run/cloudflare";
 import { useLoaderData } from "@remix-run/react";
+import * as E from "fp-ts/Either";
+import { pipe } from "fp-ts/function";
 import Leaderboard from "~/components/Leaderboard";
-import { getGame } from "~/repositories/leaderboards.server";
+import { get as getGame, type Game } from "~/models/game.server";
 import { assert } from "~/utils";
 
 export const loader = async ({ params }: LoaderArgs) => {
   assert(params.id, "No game id provided");
-  const game = await getGame(params.id);
+  // TODO: validate
+  const game = await getGame(params.id as Game["id"]);
 
-  if (game === null) {
-    throw new Response("Not Found", {
-      status: 404,
-    });
-  }
-
-  return json({ game });
+  return pipe(
+    game,
+    E.match(
+      (error) => {
+        throw new Response("Server error", { status: 500 });
+      },
+      (game) => json({ game })
+    )
+  );
 };
 
 export default function GameDetail() {

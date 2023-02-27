@@ -1,0 +1,2 @@
+- Aktualizovat vsechny routy, aby pouzivaly nove metody z models
+- Refaktorovat na Either + TaskEither

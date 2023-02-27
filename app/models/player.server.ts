@@ -16,8 +16,9 @@ export type Player = z.infer<typeof Schema>;
 const generateId = () => hyperid({ urlSafe: true })() as Player["id"];
 
 const STORAGE_PREFIX = "player#";
-const createStorageKey = (id: Player["id"]) =>
-  `${STORAGE_PREFIX}${id}` as const;
+const createStorageKey = (id: Player["id"]) => {
+  return `${STORAGE_PREFIX}${id}` as const;
+};
 
 export async function put(attributes: Omit<Player, "id">) {
   const player = Schema.safeParse({ ...attributes, id: generateId() });

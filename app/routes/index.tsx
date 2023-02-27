@@ -1,29 +1,29 @@
 import { json } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
-import Leaderboard from "~/components/Leaderboard";
-import * as gamesRepository from "~/repositories/games.server";
 import * as E from "fp-ts/Either";
+import { pipe } from "fp-ts/function";
+import Leaderboard from "~/components/Leaderboard";
+import { list as listGames, type Game } from "~/models/game.server";
 
-export const loader = async () => {
-  const games = await gamesRepository.getAll();
-
-  if (E.isLeft(games)) {
-    return json({
-      error: games.left,
-      gamesWithTopFiveLeaderboards: null,
-    });
-  }
-
-  const gamesWithTopFiveLeaderboards = games.right.map((game) => ({
+const getTopFiveForEachGame = (games: Array<Game>) => {
+  return games.map((game) => ({
     ...game,
     leaderboard: game.leaderboard.slice(0, 5),
     hasMorePlayers: game.leaderboard.length > 5,
   }));
+};
 
-  return json({
-    error: null,
-    gamesWithTopFiveLeaderboards,
-  });
+export const loader = async () => {
+  const games = await listGames();
+
+  return pipe(
+    games,
+    E.map(getTopFiveForEachGame),
+    E.matchW(
+      (error) => json({ error, games: null }),
+      (games) => json({ error: null, games })
+    )
+  );
 };
 
 export default function Index() {
@@ -38,9 +38,7 @@ export default function Index() {
           Error getting games: <pre>{data.error.name}</pre>
         </p>
       ) : (
-        data.gamesWithTopFiveLeaderboards.map((game) => (
-          <Leaderboard key={game.id} {...game} />
-        ))
+        data.games.map((game) => <Leaderboard key={game.id} {...game} />)
       )}
     </main>
   );

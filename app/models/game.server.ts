@@ -1,37 +1,43 @@
 import * as A from "fp-ts/Array";
 import * as E from "fp-ts/Either";
-import { pipe } from "fp-ts/lib/function";
+import { flow, pipe } from "fp-ts/lib/function";
 import hyperid from "hyperid";
+import type { ZodError } from "zod";
 import { z } from "zod";
 import { eitherFromSafeParse } from "~/utils";
-import {
-  Schema as LeaderboardEntrySchema,
-  type LeaderboardEntry,
-} from "./leaderboard-entry";
-import { type Player } from "./player";
+import { Schema as PlayerSchema, type Player } from "./player.server";
 
 export const Schema = z
   .object({
     id: z.string().brand<"GameID">(),
     name: z.string(),
-    leaderboard: z.array(LeaderboardEntrySchema),
+    leaderboard: z.array(
+      z.object({
+        position: z.number().positive().int(),
+        player: PlayerSchema,
+        score: z.number().int().default(0),
+      })
+    ),
   })
   .strict();
 
 export type Game = z.infer<typeof Schema>;
+type LeaderboardEntry = Game["leaderboard"][number];
 
 const generateId = () => hyperid({ urlSafe: true })() as Game["id"];
 
 const STORAGE_PREFIX = "game#";
 const createStorageKey = (id: Game["id"]) => `${STORAGE_PREFIX}${id}` as const;
 
-export async function put(attributes: Omit<Game, "id">) {
+export async function put(
+  attributes: Omit<Game, "id">
+): Promise<E.Either<Error | ZodError<Game>, Game>> {
   const game = Schema.safeParse({ ...attributes, id: generateId() });
 
   if (game.success === false) return E.left(game.error);
 
   try {
-    // TODO: convert to TaskEither
+    // TODO: convert to TaskEither1
     await STORE.put(createStorageKey(game.data.id), JSON.stringify(game.data));
     return E.right(game.data);
   } catch (error) {
@@ -52,7 +58,7 @@ export async function updateLeaderboardEntry(
         ({ player }) => player.id === playerId
       );
       const newEntry = { ...entry, ...attributes };
-      const safeEntry = LeaderboardEntrySchema.safeParse(newEntry);
+      const safeEntry = Schema.shape.leaderboard.element.safeParse(newEntry);
       if (safeEntry.success === false) return E.left(safeEntry.error);
       // TODO: cleanup
       const newLeaderboard = game.leaderboard
@@ -76,8 +82,11 @@ export async function updateLeaderboardEntry(
   );
 }
 
-export async function get(id: Game["id"]) {
+export async function get(
+  id: Game["id"]
+): Promise<E.Either<Error | ZodError<Game>, Game>> {
   try {
+    // TODO: TaskEither
     const storedGame = await STORE.get(createStorageKey(id), "json");
     return pipe(storedGame, Schema.safeParse, eitherFromSafeParse);
   } catch (error) {
@@ -93,8 +102,17 @@ export async function getLeaderboardEntry(
   const maybeGame = await get(gameId);
   return pipe(
     maybeGame,
-    E.map((game) => game.leaderboard),
-    E.map(A.findFirst(({ player }) => player.id === playerId))
+    E.chainW(
+      flow(
+        (game) => game.leaderboard,
+        A.findFirst(({ player }) => player.id === playerId),
+        E.fromOption(() => {
+          return new Error(
+            `Failed to find entry in a Game: ${gameId} for Player: ${playerId}`
+          );
+        })
+      )
+    )
   );
 }
 
@@ -108,6 +126,6 @@ export async function list() {
     const games = z.array(Schema).safeParse(storedGames);
     return eitherFromSafeParse(games);
   } catch (error) {
-    return E.left(`Failed to list Games: ${error}`);
+    return E.left(new Error(`Failed to list Games: ${error}`));
   }
 }
