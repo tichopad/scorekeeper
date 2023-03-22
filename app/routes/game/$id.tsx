@@ -7,6 +7,7 @@ import { get as getGame, type Game } from "~/models/game.server";
 import { assert } from "~/utils";
 
 export const loader = async ({ params }: LoaderArgs) => {
+  // TODO: validate + Either
   assert(params.id, "No game id provided");
   // TODO: validate
   const game = await getGame(params.id as Game["id"]);
@@ -15,6 +16,7 @@ export const loader = async ({ params }: LoaderArgs) => {
     game,
     E.match(
       (error) => {
+        console.error(error);
         throw new Response("Server error", { status: 500 });
       },
       (game) => json({ game })

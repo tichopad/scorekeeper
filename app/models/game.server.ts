@@ -67,9 +67,12 @@ export async function updateLeaderboardEntry(
           else return entry;
         })
         .sort((a, b) => {
-          return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
+          return a.score < b.score ? 1 : a.score > b.score ? -1 : 0;
         })
-        .map((entry, index) => ({ ...entry, position: index + 1 }));
+        .map((entry, index) => ({ ...entry, position: index + 1 }))
+        .sort((a, b) => {
+          return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
+        });
       return {
         ...game,
         leaderboard: newLeaderboard,

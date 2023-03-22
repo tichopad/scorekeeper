@@ -1,5 +1,5 @@
 import { Link } from "@remix-run/react";
-import type { Game } from "~/repositories/leaderboards.server";
+import type { Game } from "~/models/game.server";
 import Row from "./Row";
 
 type Props = Game & {
