@@ -1,6 +1,7 @@
 import * as E from "fp-ts/Either";
 import { pipe } from "fp-ts/lib/function";
 import hyperid from "hyperid";
+import type { ZodError } from "zod";
 import { z } from "zod";
 import { eitherFromSafeParse } from "~/utils";
 
@@ -20,7 +21,9 @@ const createStorageKey = (id: Player["id"]) => {
   return `${STORAGE_PREFIX}${id}` as const;
 };
 
-export async function put(attributes: Omit<Player, "id">) {
+export async function put(
+  attributes: Omit<Player, "id">
+): Promise<E.Either<Error | ZodError<Player>, Player>> {
   const player = Schema.safeParse({ ...attributes, id: generateId() });
 
   if (player.success === false) return E.left(player.error);
@@ -46,7 +49,9 @@ export async function get(id: Player["id"]) {
   }
 }
 
-export async function list() {
+export async function list(): Promise<
+  E.Either<Error | ZodError<Player>, Array<Player>>
+> {
   try {
     const { keys } = await STORE.list({ prefix: STORAGE_PREFIX });
     const storedPlayersPromises = keys.map(({ name }) => {
@@ -56,6 +61,6 @@ export async function list() {
     const players = z.array(Schema).safeParse(storedPlayers);
     return eitherFromSafeParse(players);
   } catch (error) {
-    return E.left(`Failed to list Players: ${error}`);
+    return E.left(new Error(`Failed to list Players: ${error}`));
   }
 }

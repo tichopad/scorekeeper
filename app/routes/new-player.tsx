@@ -1,8 +1,8 @@
 import { json, redirect, type ActionArgs } from "@remix-run/cloudflare";
 import { Form } from "@remix-run/react";
 import * as E from "fp-ts/Either";
-import { pipe } from "fp-ts/function";
-import { put as putGame } from "~/models/game.server";
+import { pipe } from "fp-ts/lib/function";
+import { put as putPlayer } from "~/models/player.server";
 import { assert } from "~/utils";
 
 export const action = async ({ request }: ActionArgs) => {
@@ -12,10 +12,10 @@ export const action = async ({ request }: ActionArgs) => {
   assert(name, "Name is required for creating new game");
   assert(typeof name === "string", "Name has to be a string");
 
-  const newGame = await putGame({ name, leaderboard: [] });
+  const newPlayer = await putPlayer({ name });
 
   return pipe(
-    newGame,
+    newPlayer,
     E.match(
       (error) => json({ error }),
       () => redirect("/")
@@ -23,10 +23,10 @@ export const action = async ({ request }: ActionArgs) => {
   );
 };
 
-export default function CreateNewGame() {
+export default function CreateNewPlayer() {
   return (
     <main>
-      <h1>Create new game</h1>
+      <h1>Create new player</h1>
       <Form method="post">
         <label>
           Name

@@ -1,5 +1,5 @@
 import { json, type LoaderArgs } from "@remix-run/cloudflare";
-import { useLoaderData } from "@remix-run/react";
+import { Link, useLoaderData } from "@remix-run/react";
 import * as E from "fp-ts/Either";
 import { pipe } from "fp-ts/function";
 import Leaderboard from "~/components/Leaderboard";
@@ -29,6 +29,7 @@ export default function GameDetail() {
 
   return (
     <main>
+      <Link to="..">Back</Link>
       <h1>Game detail</h1>
       <Leaderboard hasMorePlayers={false} {...game} />
     </main>

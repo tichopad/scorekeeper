@@ -31,7 +31,11 @@ export default function Index() {
 
   return (
     <main>
-      <Link to="/new-game">Create new game</Link>
+      <div>
+        <Link to="/new-game">Create new game</Link>
+        <br />
+        <Link to="/new-player">Create new player</Link>
+      </div>
       <h1>Leaderboards</h1>
       {data.error ? (
         <p>
