@@ -59,7 +59,11 @@ export async function list(): Promise<
     });
     const storedPlayers = await Promise.all(storedPlayersPromises);
     const players = z.array(Schema).safeParse(storedPlayers);
-    return eitherFromSafeParse(players);
+    return pipe(
+      players,
+      eitherFromSafeParse,
+      E.map((players) => players.sort((a, b) => a.name.localeCompare(b.name)))
+    );
   } catch (error) {
     return E.left(new Error(`Failed to list Players: ${error}`));
   }

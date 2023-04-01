@@ -30,6 +30,8 @@ export default function GameDetail() {
   return (
     <main>
       <Link to="..">Back</Link>
+      <br />
+      <Link to="./add-player">Add player</Link>
       <h1>Game detail</h1>
       <Leaderboard hasMorePlayers={false} {...game} />
     </main>

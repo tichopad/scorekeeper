@@ -15,7 +15,7 @@ export const Schema = z
       z.object({
         position: z.number().positive().int(),
         player: PlayerSchema,
-        score: z.number().int().default(0),
+        score: z.coerce.number().int().default(0),
       })
     ),
   })
@@ -82,6 +82,43 @@ export async function updateLeaderboardEntry(
     E.map((updatedGame) =>
       STORE.put(createStorageKey(gameId), JSON.stringify(updatedGame))
     )
+  );
+}
+
+export async function addPlayerToLeaderboard(
+  id: Game["id"],
+  player: Player,
+  score: LeaderboardEntry["score"]
+) {
+  const maybeGame = await get(id);
+  return pipe(
+    maybeGame,
+    E.map((game) => {
+      // Calculate the position of the new entry
+      const position = game.leaderboard.reduce((acc, entry) => {
+        if (score > entry.score) return acc + 1;
+        else return acc;
+      }, 1);
+
+      const newLeaderboard = [
+        ...game.leaderboard,
+        {
+          position,
+          player,
+          score: score ?? 0,
+        },
+      ].sort((a, b) => {
+        return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
+      });
+
+      return {
+        ...game,
+        leaderboard: newLeaderboard,
+      };
+    }),
+    E.map((updatedGame) => {
+      return STORE.put(createStorageKey(id), JSON.stringify(updatedGame));
+    })
   );
 }
 
