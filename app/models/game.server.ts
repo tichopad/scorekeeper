@@ -94,26 +94,16 @@ export async function addPlayerToLeaderboard(
   return pipe(
     maybeGame,
     E.map((game) => {
-      // Calculate the position of the new entry
-      const position = game.leaderboard.reduce((acc, entry) => {
-        if (score > entry.score) return acc + 1;
-        else return acc;
-      }, 1);
+      const newEntry: LeaderboardEntry = { position: 0, score, player };
 
-      const newLeaderboard = [
-        ...game.leaderboard,
-        {
-          position,
-          player,
-          score: score ?? 0,
-        },
-      ].sort((a, b) => {
-        return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
-      });
+      const sortedLeaderboard = game.leaderboard
+        .concat([newEntry])
+        .sort((a, b) => b.score - a.score)
+        .map((entry, index) => ({ ...entry, position: index + 1 }));
 
       return {
         ...game,
-        leaderboard: newLeaderboard,
+        leaderboard: sortedLeaderboard,
       };
     }),
     E.map((updatedGame) => {

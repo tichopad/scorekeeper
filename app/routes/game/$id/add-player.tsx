@@ -65,7 +65,7 @@ export const action = async ({ request, params }: ActionArgs) => {
     E.match(
       (error) => {
         console.error(error);
-        throw new Response("Server error", { status: 500 });
+        throw new Response("Failed to add player to the game", { status: 500 });
       },
       () => redirect(`/game/${gameId}`)
     )
