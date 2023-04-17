@@ -1,9 +1,9 @@
-import * as E from "fp-ts/Either";
-import { pipe } from "fp-ts/lib/function";
+import * as A from "fp-ts/Array";
+import * as TE from "fp-ts/TaskEither";
+import { pipe } from "fp-ts/function";
 import hyperid from "hyperid";
-import type { ZodError } from "zod";
 import { z } from "zod";
-import { eitherFromSafeParse } from "~/utils";
+import { validateWithSchemaAsync } from "~/utils";
 
 export const Schema = z
   .object({
@@ -17,54 +17,82 @@ export type Player = z.infer<typeof Schema>;
 const generateId = () => hyperid({ urlSafe: true })() as Player["id"];
 
 const STORAGE_PREFIX = "player#";
+
 const createStorageKey = (id: Player["id"]) => {
   return `${STORAGE_PREFIX}${id}` as const;
 };
 
-export async function put(
-  attributes: Omit<Player, "id">
-): Promise<E.Either<Error | ZodError<Player>, Player>> {
-  const player = Schema.safeParse({ ...attributes, id: generateId() });
+/**
+ * List all raw unvalidated players from storage
+ */
+const listRawPlayersFromStorage = TE.tryCatch(
+  () => STORE.list({ prefix: STORAGE_PREFIX }),
+  (error) => new Error(`Failed to list Players: ${error}`)
+);
 
-  if (player.success === false) return E.left(player.error);
+/**
+ * Get a raw unvalidated player from storage
+ */
+const getRawPlayerFromStorage = (name: string) =>
+  TE.tryCatch(
+    () => STORE.get(name, "json"),
+    (error) => new Error(`Failed to get Player ${name}: ${error}`)
+  );
 
-  try {
-    // TODO: convert to TaskEither
-    await STORE.put(
-      createStorageKey(player.data.id),
-      JSON.stringify(player.data)
-    );
-    return E.right(player.data);
-  } catch (error) {
-    return E.left(new Error(`Failed to store Player: ${error}`));
-  }
-}
+/**
+ * Store a player
+ */
+const storePlayer = (player: Player) =>
+  TE.tryCatch(
+    async () => {
+      await STORE.put(createStorageKey(player.id), JSON.stringify(player));
+      return player;
+    },
+    (error) => new Error(`Failed to store Player: ${error}`)
+  );
 
-export async function get(id: Player["id"]) {
-  try {
-    const storedPlayer = await STORE.get(createStorageKey(id), "json");
-    return pipe(storedPlayer, Schema.safeParse, eitherFromSafeParse);
-  } catch (error) {
-    return E.left(new Error(`Failed to get Player: ${error}`));
-  }
-}
+/**
+ * Create a plain new player object with a new ID
+ */
+const createNewPlayer = (attributes: Omit<Player, "id">): Player => ({
+  ...attributes,
+  id: generateId(),
+});
 
-export async function list(): Promise<
-  E.Either<Error | ZodError<Player>, Array<Player>>
-> {
-  try {
-    const { keys } = await STORE.list({ prefix: STORAGE_PREFIX });
-    const storedPlayersPromises = keys.map(({ name }) => {
-      return STORE.get(name, "json");
-    });
-    const storedPlayers = await Promise.all(storedPlayersPromises);
-    const players = z.array(Schema).safeParse(storedPlayers);
-    return pipe(
-      players,
-      eitherFromSafeParse,
-      E.map((players) => players.sort((a, b) => a.name.localeCompare(b.name)))
-    );
-  } catch (error) {
-    return E.left(new Error(`Failed to list Players: ${error}`));
-  }
-}
+/**
+ * Create a new player and store it
+ */
+export const put = (attributes: Omit<Player, "id">) =>
+  pipe(
+    createNewPlayer(attributes),
+    validateWithSchemaAsync(Schema),
+    TE.chainW(storePlayer)
+  );
+
+/**
+ * Get a player by ID
+ */
+export const get = (id: Player["id"]) =>
+  pipe(
+    getRawPlayerFromStorage(createStorageKey(id)),
+    validateWithSchemaAsync(Schema)
+  );
+
+/**
+ * List all players, sorted by name
+ */
+export const list = () =>
+  pipe(
+    listRawPlayersFromStorage,
+    TE.chainW(({ keys }) =>
+      pipe(
+        keys,
+        A.map(({ name }) => getRawPlayerFromStorage(name)),
+        A.sequence(TE.ApplicativePar),
+        validateWithSchemaAsync(z.array(Schema)),
+        TE.map((players) =>
+          players.sort((a, b) => a.name.localeCompare(b.name))
+        )
+      )
+    )
+  );

@@ -1,23 +1,28 @@
 import * as A from "fp-ts/Array";
 import * as E from "fp-ts/Either";
-import { flow, pipe } from "fp-ts/lib/function";
+import * as TE from "fp-ts/lib/TaskEither";
+import { pipe } from "fp-ts/lib/function";
 import hyperid from "hyperid";
 import type { ZodError } from "zod";
 import { z } from "zod";
-import { eitherFromSafeParse } from "~/utils";
+import {
+  eitherFromSafeParse,
+  taskEitherFromSafeParse,
+  validateWithSchemaAsync,
+} from "~/utils";
 import { Schema as PlayerSchema, type Player } from "./player.server";
+
+const LeaderboardEntrySchema = z.object({
+  position: z.number().positive().int(),
+  player: PlayerSchema,
+  score: z.coerce.number().int().default(0),
+});
 
 export const Schema = z
   .object({
     id: z.string().brand<"GameID">(),
     name: z.string(),
-    leaderboard: z.array(
-      z.object({
-        position: z.number().positive().int(),
-        player: PlayerSchema,
-        score: z.coerce.number().int().default(0),
-      })
-    ),
+    leaderboard: z.array(LeaderboardEntrySchema),
   })
   .strict();
 
@@ -29,133 +34,193 @@ const generateId = () => hyperid({ urlSafe: true })() as Game["id"];
 const STORAGE_PREFIX = "game#";
 const createStorageKey = (id: Game["id"]) => `${STORAGE_PREFIX}${id}` as const;
 
-export async function put(
-  attributes: Omit<Game, "id">
-): Promise<E.Either<Error | ZodError<Game>, Game>> {
-  const game = Schema.safeParse({ ...attributes, id: generateId() });
+/**
+ * List all raw unvalidated games from storage
+ */
+const listRawGamesFromStorage = TE.tryCatch(
+  () => STORE.list({ prefix: STORAGE_PREFIX }),
+  (error) => new Error(`Failed to list Games: ${error}`)
+);
 
-  if (game.success === false) return E.left(game.error);
-
-  try {
-    // TODO: convert to TaskEither1
-    await STORE.put(createStorageKey(game.data.id), JSON.stringify(game.data));
-    return E.right(game.data);
-  } catch (error) {
-    return E.left(new Error(`Failed to store Game: ${error}`));
-  }
-}
-
-export async function updateLeaderboardEntry(
-  gameId: Game["id"],
-  playerId: Player["id"],
-  attributes: Partial<LeaderboardEntry>
-) {
-  const maybeGame = await get(gameId);
-  return pipe(
-    maybeGame,
-    E.map((game) => {
-      const entry = game.leaderboard.find(
-        ({ player }) => player.id === playerId
-      );
-      const newEntry = { ...entry, ...attributes };
-      const safeEntry = Schema.shape.leaderboard.element.safeParse(newEntry);
-      if (safeEntry.success === false) return E.left(safeEntry.error);
-      // TODO: cleanup
-      const newLeaderboard = game.leaderboard
-        .map((entry) => {
-          if (entry.player.id === playerId) return safeEntry.data;
-          else return entry;
-        })
-        .sort((a, b) => {
-          return a.score < b.score ? 1 : a.score > b.score ? -1 : 0;
-        })
-        .map((entry, index) => ({ ...entry, position: index + 1 }))
-        .sort((a, b) => {
-          return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
-        });
-      return {
-        ...game,
-        leaderboard: newLeaderboard,
-      };
-    }),
-    // TODO: this needs TaskEither
-    E.map((updatedGame) =>
-      STORE.put(createStorageKey(gameId), JSON.stringify(updatedGame))
-    )
+/**
+ * Get a raw unvalidated game from storage
+ */
+const getRawGameFromStorage = (storageKey: string) =>
+  TE.tryCatch(
+    () => STORE.get(storageKey, "json"),
+    (error) => new Error(`Failed to get Game ${name}: ${error}`)
   );
+
+/**
+ * Create a new Game and store it
+ */
+export function put(
+  attributes: Omit<Game, "id">
+): TE.TaskEither<Error | ZodError<Game>, Game> {
+  const newGame: Game = { ...attributes, id: generateId() };
+  const storeGame = TE.chainW((game: Game) => {
+    return TE.tryCatch(
+      async () => {
+        await STORE.put(createStorageKey(game.id), JSON.stringify(game));
+        return game;
+      },
+      (error) => new Error(`Failed to store Game: ${error}`)
+    );
+  });
+
+  return pipe(newGame, validateWithSchemaAsync(Schema), storeGame);
 }
 
-export async function addPlayerToLeaderboard(
+/**
+ * Add a Player to a Game's Leaderboard
+ */
+export function addPlayerToLeaderboard(
   id: Game["id"],
   player: Player,
   score: LeaderboardEntry["score"]
 ) {
-  const maybeGame = await get(id);
-  return pipe(
-    maybeGame,
-    E.map((game) => {
-      const newEntry: LeaderboardEntry = { position: 0, score, player };
+  const getGame = get(id);
 
-      const sortedLeaderboard = game.leaderboard
-        .concat([newEntry])
-        .sort((a, b) => b.score - a.score)
-        .map((entry, index) => ({ ...entry, position: index + 1 }));
+  const addPlayer = TE.map((game: Game) => {
+    const newEntry: LeaderboardEntry = { position: 0, score, player };
 
-      return {
-        ...game,
-        leaderboard: sortedLeaderboard,
-      };
-    }),
-    E.map((updatedGame) => {
-      return STORE.put(createStorageKey(id), JSON.stringify(updatedGame));
+    const sortedLeaderboard = game.leaderboard
+      .concat([newEntry])
+      .sort((a, b) => b.score - a.score)
+      .map((entry, index) => ({ ...entry, position: index + 1 }));
+
+    return {
+      ...game,
+      leaderboard: sortedLeaderboard,
+    };
+  });
+
+  return pipe(getGame, addPlayer, TE.chain(storeGame));
+}
+
+/**
+ * Get a Game by ID
+ */
+export const get = (id: Game["id"]) =>
+  pipe(
+    getRawGameFromStorage(createStorageKey(id)),
+    Schema.safeParse,
+    taskEitherFromSafeParse
+  );
+
+/**
+ * Get a Leaderboard Entry for a Player in a Game
+ */
+const getEntryByPlayerId = (playerId: Player["id"]) => (game: Game) =>
+  pipe(
+    game.leaderboard,
+    A.findFirst(({ player }) => player.id === playerId),
+    E.fromOption(() => {
+      return new Error(
+        `Failed to find entry in a Game: ${game.id} for Player: ${playerId}`
+      );
     })
   );
-}
 
-export async function get(
-  id: Game["id"]
-): Promise<E.Either<Error | ZodError<Game>, Game>> {
-  try {
-    // TODO: TaskEither
-    const storedGame = await STORE.get(createStorageKey(id), "json");
-    return pipe(storedGame, Schema.safeParse, eitherFromSafeParse);
-  } catch (error) {
-    return E.left(new Error(`Failed to get Game: ${error}`));
-  }
-}
-
-export async function getLeaderboardEntry(
+/**
+ * Get a Leaderboard Entry for a Player in a Game
+ */
+export const getLeaderboardEntry = (
   gameId: Game["id"],
   playerId: Player["id"]
-) {
-  // TODO: TaskEither
-  const maybeGame = await get(gameId);
-  return pipe(
-    maybeGame,
-    E.chainW(
-      flow(
-        (game) => game.leaderboard,
-        A.findFirst(({ player }) => player.id === playerId),
-        E.fromOption(() => {
-          return new Error(
-            `Failed to find entry in a Game: ${gameId} for Player: ${playerId}`
-          );
-        })
+) =>
+  pipe(
+    get(gameId),
+    TE.map(getEntryByPlayerId(playerId)),
+    TE.map(TE.fromEither),
+    TE.flatten
+  );
+
+/**
+ * List all Games sorted by name
+ */
+export const list = () =>
+  pipe(
+    listRawGamesFromStorage,
+    TE.chainW(({ keys }) =>
+      pipe(
+        keys,
+        A.map(({ name }) => getRawGameFromStorage(name)),
+        A.sequence(TE.ApplicativePar),
+        validateWithSchemaAsync(z.array(Schema)),
+        TE.map((games) => games.sort((a, b) => a.name.localeCompare(b.name)))
       )
     )
   );
-}
 
-export async function list() {
-  try {
-    const { keys } = await STORE.list({ prefix: STORAGE_PREFIX });
-    const storedGamesPromises = keys.map(({ name }) => {
-      return STORE.get(name, "json");
-    });
-    const storedGames = await Promise.all(storedGamesPromises);
-    const games = z.array(Schema).safeParse(storedGames);
-    return eitherFromSafeParse(games);
-  } catch (error) {
-    return E.left(new Error(`Failed to list Games: ${error}`));
-  }
-}
+/**
+ * Update a Leaderboard Entry for a Player
+ */
+const updatePlayerEntry =
+  (playerId: Player["id"], attributes: Partial<LeaderboardEntry>) =>
+  (entry: LeaderboardEntry) => {
+    if (entry.player.id !== playerId) return E.right(entry);
+    return pipe(
+      { ...entry, ...attributes },
+      LeaderboardEntrySchema.safeParse,
+      eitherFromSafeParse
+    );
+  };
+
+/**
+ * Update the positions of a Leaderboard
+ */
+const updateLeaderboardPositionsByScore = (leaderboard: LeaderboardEntry[]) =>
+  leaderboard
+    .sort((a, b) => b.score - a.score)
+    .map((entry, index) => ({ ...entry, position: index + 1 }))
+    .sort((a, b) => a.position - b.position);
+
+/**
+ * Update a Leaderboard
+ */
+const updateLeaderboard =
+  (playerId: Player["id"], attributes: Partial<LeaderboardEntry>) =>
+  (leaderboard: LeaderboardEntry[]) =>
+    pipe(
+      leaderboard,
+      A.map(updatePlayerEntry(playerId, attributes)),
+      A.sequence(E.Applicative),
+      E.map(updateLeaderboardPositionsByScore)
+    );
+
+/**
+ * Update a Game's Leaderboard
+ */
+const updateGameLeaderboard =
+  (playerId: Player["id"], attributes: Partial<LeaderboardEntry>) =>
+  (game: Game) =>
+    pipe(
+      game.leaderboard,
+      updateLeaderboard(playerId, attributes),
+      E.map((leaderboard) => ({ ...game, leaderboard })),
+      TE.fromEither
+    );
+
+/**
+ * Store a Game in the database
+ */
+const storeGame = (game: Game) =>
+  TE.tryCatch(
+    () => STORE.put(createStorageKey(game.id), JSON.stringify(game)),
+    (error) => new Error(`Failed to save Game: ${error}`)
+  );
+
+/**
+ * Update a LeaderboardEntry for a given Game and Player
+ */
+export const updateLeaderboardEntry = (
+  gameId: Game["id"],
+  playerId: Player["id"],
+  attributes: Partial<LeaderboardEntry>
+) =>
+  pipe(
+    get(gameId),
+    TE.chainW(updateGameLeaderboard(playerId, attributes)),
+    TE.chain(storeGame)
+  );

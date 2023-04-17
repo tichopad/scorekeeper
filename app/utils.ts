@@ -1,6 +1,11 @@
 import * as E from "fp-ts/Either";
-import { type SafeParseReturnType } from "zod";
+import * as TE from "fp-ts/TaskEither";
+import { pipe } from "fp-ts/lib/function";
+import type { SafeParseReturnType, ZodError, ZodType, ZodTypeDef } from "zod";
 
+/**
+ * Asserts that an expression is truthy, throwing an error if it is not
+ */
 export function assert(
   expression: any,
   message = "Expected truthy value"
@@ -8,21 +13,39 @@ export function assert(
   if (!expression) throw new Error(message);
 }
 
-export const slugify = (...args: (string | number)[]): string => {
-  const value = args.join(" ");
-
-  return value
-    .normalize("NFD") // split an accented letter in the base letter and the acent
-    .replace(/[\u0300-\u036f]/g, "") // remove all previously split accents
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9 ]/g, "") // remove all chars not letters, numbers and spaces (to be replaced)
-    .replace(/\s+/g, "-"); // separator
-};
-
-export function eitherFromSafeParse<Error, Data>(
-  input: SafeParseReturnType<Error, Data>
-) {
+/**
+ * Takes in a ZodSchema.safeParse() return value and returns an Either
+ */
+export function eitherFromSafeParse<TInput, TOutput>(
+  input: SafeParseReturnType<TInput, TOutput>
+): E.Either<ZodError<TInput>, TOutput> {
   if (input.success === true) return E.right(input.data);
   else return E.left(input.error);
 }
+
+/**
+ * Takes in a ZodSchema.safeParse() return value and returns a TaskEither
+ */
+export function taskEitherFromSafeParse<TInput, TOutput>(
+  input: SafeParseReturnType<TInput, TOutput>
+): TE.TaskEither<ZodError<TInput>, TOutput> {
+  if (input.success === true) return TE.right(input.data);
+  else return TE.left(input.error);
+}
+
+/**
+ * Validate an input against a Zod schema, returning a TaskEither
+ */
+export const validateWithSchemaAsync =
+  <TOutput, TDefinition extends ZodTypeDef, TInput>(
+    schema: ZodType<TOutput, TDefinition, TInput>
+  ) =>
+  (input: unknown) => {
+    return pipe(
+      TE.tryCatch(
+        () => schema.safeParseAsync(input),
+        (error) => new Error(`Schema parsing error: ${error}`)
+      ),
+      TE.chainW(taskEitherFromSafeParse)
+    );
+  };
