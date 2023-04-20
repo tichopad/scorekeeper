@@ -6,6 +6,7 @@ import {
 } from "@remix-run/cloudflare";
 import { Form, useLoaderData } from "@remix-run/react";
 import * as E from "fp-ts/Either";
+import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/lib/function";
 import type { Game } from "~/models/game.server";
 import {
@@ -13,11 +14,13 @@ import {
   addPlayerToLeaderboard,
   get as getGame,
 } from "~/models/game.server";
+import type { Player } from "~/models/player.server";
 import {
   Schema as PlayerSchema,
   get as getPlayer,
   list as listPlayers,
 } from "~/models/player.server";
+import { runTasksInParallel, validateWithSchemaAsync } from "~/utils";
 
 export const action = async ({ request, params }: ActionArgs) => {
   const gameId = params.id;
@@ -73,32 +76,33 @@ export const action = async ({ request, params }: ActionArgs) => {
 };
 
 export const loader = async (args: LoaderArgs) => {
-  const players = await listPlayers();
-  const playersInGame = await getGame(args.params.id as Game["id"]);
+  const rejectPlayersAlreadyInGame = (players: Player[], game: Game) => {
+    return players.filter((player) =>
+      game.leaderboard.every((entry) => entry.player.id !== player.id)
+    );
+  };
 
-  if (E.isLeft(playersInGame)) {
-    console.error(playersInGame.left);
-    throw new Response("Server error", { status: 500 });
-  }
-
-  return pipe(
-    players,
-    E.map((players) => {
-      // Filter out players that are already in the game
-      return players.filter((player) => {
-        return playersInGame.right.leaderboard.every(
-          (entry) => entry.player.id !== player.id
-        );
-      });
-    }),
-    E.match(
+  const getResponse = pipe(
+    args.params.id,
+    validateWithSchemaAsync(GameSchema.shape.id),
+    TE.chain((gameId) =>
+      runTasksInParallel({
+        allPlayers: listPlayers(),
+        game: getGame(gameId),
+      })
+    ),
+    TE.map(({ allPlayers, game }) =>
+      rejectPlayersAlreadyInGame(allPlayers, game)
+    ),
+    TE.match(
       (error) => {
-        console.error(error);
         throw new Response("Server error", { status: 500 });
       },
       (players) => json({ players })
     )
   );
+
+  return getResponse();
 };
 
 export default function AddPlayer() {

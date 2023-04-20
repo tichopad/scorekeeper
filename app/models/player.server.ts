@@ -7,8 +7,11 @@ import { validateWithSchemaAsync } from "~/utils";
 
 export const Schema = z
   .object({
-    id: z.string().brand<"PlayerID">(),
-    name: z.string(),
+    id: z.coerce
+      .string()
+      .min(1, { message: "Player ID cannot be empty" })
+      .brand<"PlayerID">(),
+    name: z.coerce.string().min(1, { message: "Player name cannot be empty" }),
   })
   .strict();
 

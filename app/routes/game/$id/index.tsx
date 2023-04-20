@@ -1,20 +1,19 @@
 import { json, type LoaderArgs } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
-import * as E from "fp-ts/Either";
 import { pipe } from "fp-ts/function";
-import Leaderboard from "~/components/Leaderboard";
-import { get as getGame, type Game } from "~/models/game.server";
-import { assert } from "~/utils";
+import * as TE from "fp-ts/TaskEither";
+import Leaderboard from "~/models/components/Leaderboard";
+import { Schema as GameSchema, get as getGame } from "~/models/game.server";
+import { validateWithSchemaAsync } from "~/utils";
+
+const ParamsSchema = GameSchema.pick({ id: true });
 
 export const loader = async ({ params }: LoaderArgs) => {
-  // TODO: validate + Either
-  assert(params.id, "No game id provided");
-  // TODO: validate
-  const game = await getGame(params.id as Game["id"]);
-
-  return pipe(
-    game,
-    E.match(
+  const getResponse = pipe(
+    params,
+    validateWithSchemaAsync(ParamsSchema),
+    TE.chainW(({ id }) => getGame(id)),
+    TE.match(
       (error) => {
         console.error(error);
         throw new Response("Server error", { status: 500 });
@@ -22,6 +21,8 @@ export const loader = async ({ params }: LoaderArgs) => {
       (game) => json({ game })
     )
   );
+
+  return getResponse();
 };
 
 export default function GameDetail() {

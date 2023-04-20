@@ -1,8 +1,8 @@
 import { json } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
-import * as E from "fp-ts/Either";
+import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
-import Leaderboard from "~/components/Leaderboard";
+import Leaderboard from "~/models/components/Leaderboard";
 import { list as listGames, type Game } from "~/models/game.server";
 
 const getTopFiveForEachGame = (games: Array<Game>) => {
@@ -14,16 +14,16 @@ const getTopFiveForEachGame = (games: Array<Game>) => {
 };
 
 export const loader = async () => {
-  const games = await listGames();
-
-  return pipe(
-    games,
-    E.map(getTopFiveForEachGame),
-    E.matchW(
+  const getResponse = pipe(
+    listGames(),
+    TE.map(getTopFiveForEachGame),
+    TE.matchW(
       (error) => json({ error, games: null }),
       (games) => json({ error: null, games })
     )
   );
+
+  return getResponse();
 };
 
 export default function Index() {

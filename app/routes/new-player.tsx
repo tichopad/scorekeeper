@@ -1,26 +1,28 @@
 import { json, redirect, type ActionArgs } from "@remix-run/cloudflare";
 import { Form } from "@remix-run/react";
-import * as E from "fp-ts/Either";
+import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/lib/function";
-import { put as putPlayer } from "~/models/player.server";
-import { assert } from "~/utils";
+import {
+  Schema as PlayerSchema,
+  put as putPlayer,
+} from "~/models/player.server";
+import { validateFormDataAsync } from "~/utils";
+
+const FormSchema = PlayerSchema.pick({ name: true });
 
 export const action = async ({ request }: ActionArgs) => {
-  const body = await request.formData();
-  const name = body.get("name");
-
-  assert(name, "Name is required for creating new game");
-  assert(typeof name === "string", "Name has to be a string");
-
-  const newPlayer = await putPlayer({ name });
-
-  return pipe(
-    newPlayer,
-    E.match(
+  const formData = await request.formData();
+  const getResponse = pipe(
+    formData,
+    validateFormDataAsync(FormSchema),
+    TE.chain(({ name }) => putPlayer({ name })),
+    TE.match(
       (error) => json({ error }),
-      () => redirect("/")
+      (player) => redirect("/")
     )
   );
+
+  return getResponse();
 };
 
 export default function CreateNewPlayer() {

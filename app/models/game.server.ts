@@ -20,8 +20,11 @@ const LeaderboardEntrySchema = z.object({
 
 export const Schema = z
   .object({
-    id: z.string().brand<"GameID">(),
-    name: z.string(),
+    id: z.coerce
+      .string()
+      .min(1, { message: "Game ID cannot be empty" })
+      .brand<"GameID">(),
+    name: z.coerce.string().min(1, { message: "Game name cannot be empty" }),
     leaderboard: z.array(LeaderboardEntrySchema),
   })
   .strict();
