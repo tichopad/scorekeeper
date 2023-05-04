@@ -6,7 +6,7 @@ import {
   Schema as PlayerSchema,
   put as putPlayer,
 } from "~/models/player.server";
-import { validateFormDataAsync } from "~/utils";
+import { validateFormDataAsync } from "~/utils/validation";
 
 const FormSchema = PlayerSchema.pick({ name: true });
 

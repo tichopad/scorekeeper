@@ -2,9 +2,9 @@ import { json, type LoaderArgs } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { pipe } from "fp-ts/function";
 import * as TE from "fp-ts/TaskEither";
-import Leaderboard from "~/models/components/Leaderboard";
+import Leaderboard from "~/components/Leaderboard";
 import { Schema as GameSchema, get as getGame } from "~/models/game.server";
-import { validateWithSchemaAsync } from "~/utils";
+import { validateWithSchemaAsync } from "~/utils/validation";
 
 const ParamsSchema = GameSchema.pick({ id: true });
 

@@ -2,7 +2,6 @@ import * as E from "fp-ts/Either";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/lib/function";
 import type { SafeParseReturnType, ZodError, ZodTypeAny } from "zod";
-import { convertFormDataToObject } from "./generic";
 
 type ZodSchemaValidation<TSchema extends ZodTypeAny> = E.Either<
   ZodError<TSchema["_input"]>,
@@ -69,7 +68,7 @@ export const validateFormDataAsync =
   (formData: FormData): ZodSchemaValidationTask<TSchema> => {
     return pipe(
       formData,
-      convertFormDataToObject,
+      (formData) => Object.fromEntries(formData.entries()),
       validateWithSchemaAsync(schema)
     );
   };

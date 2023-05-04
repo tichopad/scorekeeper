@@ -21,14 +21,3 @@ export function assert(
 ): asserts expression {
   if (!expression) throw new Error(message);
 }
-
-/**
- * Converts a FormData object to a plain object
- */
-export function convertFormDataToObject(formData: FormData) {
-  const object: Record<string, string> = {};
-  formData.forEach((value, key) => {
-    object[key] = value.toString();
-  });
-  return object;
-}

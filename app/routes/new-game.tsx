@@ -3,7 +3,7 @@ import { Form } from "@remix-run/react";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
 import { Schema as GameSchema, put as putGame } from "~/models/game.server";
-import { validateFormDataAsync } from "~/utils";
+import { validateFormDataAsync } from "~/utils/validation";
 
 const FormSchema = GameSchema.pick({ name: true });
 

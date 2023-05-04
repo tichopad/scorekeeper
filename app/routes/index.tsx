@@ -2,7 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
-import Leaderboard from "~/models/components/Leaderboard";
+import Leaderboard from "~/components/Leaderboard";
 import { list as listGames, type Game } from "~/models/game.server";
 
 const getTopFiveForEachGame = (games: Array<Game>) => {
