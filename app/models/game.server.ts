@@ -6,10 +6,9 @@ import hyperid from "hyperid";
 import type { ZodError } from "zod";
 import { z } from "zod";
 import {
-  eitherFromSafeParse,
-  taskEitherFromSafeParse,
+  validateWithSchema,
   validateWithSchemaAsync,
-} from "~/utils";
+} from "~/utils/validation";
 import { Schema as PlayerSchema, type Player } from "./player.server";
 
 const LeaderboardEntrySchema = z.object({
@@ -78,11 +77,11 @@ export function put(
  * Add a Player to a Game's Leaderboard
  */
 export function addPlayerToLeaderboard(
-  id: Game["id"],
+  gameId: Game["id"],
   player: Player,
   score: LeaderboardEntry["score"]
 ) {
-  const getGame = get(id);
+  const getGame = get(gameId);
 
   const addPlayer = TE.map((game: Game) => {
     const newEntry: LeaderboardEntry = { position: 0, score, player };
@@ -107,8 +106,7 @@ export function addPlayerToLeaderboard(
 export const get = (id: Game["id"]) =>
   pipe(
     getRawGameFromStorage(createStorageKey(id)),
-    Schema.safeParse,
-    taskEitherFromSafeParse
+    validateWithSchemaAsync(Schema)
   );
 
 /**
@@ -165,8 +163,7 @@ const updatePlayerEntry =
     if (entry.player.id !== playerId) return E.right(entry);
     return pipe(
       { ...entry, ...attributes },
-      LeaderboardEntrySchema.safeParse,
-      eitherFromSafeParse
+      validateWithSchema(LeaderboardEntrySchema)
     );
   };
 

@@ -5,85 +5,80 @@ import {
   type LoaderArgs,
 } from "@remix-run/cloudflare";
 import { Form, useLoaderData } from "@remix-run/react";
-import * as E from "fp-ts/Either";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/lib/function";
+import { z } from "zod";
 import type { Game } from "~/models/game.server";
 import {
   Schema as GameSchema,
   addPlayerToLeaderboard,
   get as getGame,
 } from "~/models/game.server";
-import type { Player } from "~/models/player.server";
 import {
   Schema as PlayerSchema,
   get as getPlayer,
   list as listPlayers,
+  type Player,
 } from "~/models/player.server";
-import { runTasksInParallel, validateWithSchemaAsync } from "~/utils";
+import { runTasksInParallel } from "~/utils/generic";
+import {
+  validateFormDataAsync,
+  validateWithSchemaAsync,
+} from "~/utils/validation";
+
+const FormSchema = z.object({
+  playerId: PlayerSchema.shape.id,
+  initialScore: GameSchema.shape.leaderboard.element.shape.score,
+});
 
 export const action = async ({ request, params }: ActionArgs) => {
-  const gameId = params.id;
-
-  // Validate game id
-  const safeGameId = GameSchema.shape.id.safeParse(gameId);
-
-  if (safeGameId.success === false) {
-    throw new Response("Invalid game id", { status: 400 });
-  }
-
-  const body = await request.formData();
-  const playerId = body.get("playerId");
-
-  const safePlayerId = PlayerSchema.shape.id.safeParse(playerId);
-
-  if (safePlayerId.success === false) {
-    throw new Response("Invalid player id", { status: 400 });
-  }
-
-  const LeaderboardEntrySchema = GameSchema.shape.leaderboard.element;
-  const initialScore = body.get("initialScore");
-  const safeInitialScore =
-    LeaderboardEntrySchema.shape.score.safeParse(initialScore);
-  if (safeInitialScore.success === false) {
-    throw new Response("Invalid initial score", { status: 400 });
-  }
-
-  // Get player by id
-  const player = await getPlayer(safePlayerId.data);
-
-  if (E.isLeft(player)) {
-    throw new Response("Player not found", { status: 404 });
-  }
-
-  // Add player to leaderboard
-  const result = await addPlayerToLeaderboard(
-    safeGameId.data,
-    player.right,
-    safeInitialScore.data
+  const getGameId = pipe(
+    params.id,
+    validateWithSchemaAsync(GameSchema.shape.id)
   );
 
-  return pipe(
-    result,
-    E.match(
-      (error) => {
-        console.error(error);
-        throw new Response("Failed to add player to the game", { status: 500 });
-      },
-      () => redirect(`/game/${gameId}`)
+  const getFormData = pipe(
+    TE.tryCatch(
+      () => request.formData(),
+      (error) => new Error(`Failed to get form data: ${error}`)
+    ),
+    TE.chain(validateFormDataAsync(FormSchema))
+  );
+
+  const getResponse = pipe(
+    runTasksInParallel({
+      gameId: getGameId,
+      formData: getFormData,
+    }),
+    TE.map(({ gameId, formData }) =>
+      pipe(
+        getPlayer(formData.playerId),
+        TE.map((player) =>
+          addPlayerToLeaderboard(gameId, player, formData.initialScore)
+        ),
+        TE.match(
+          (error) =>
+            new Response(`Failed to add player to the game: ${error}`, {
+              status: 500,
+            }),
+          () => redirect(`/game/${gameId}`)
+        )
+      )
     )
   );
+
+  return getResponse();
 };
 
-export const loader = async (args: LoaderArgs) => {
-  const rejectPlayersAlreadyInGame = (players: Player[], game: Game) => {
+export const loader = async ({ params }: LoaderArgs) => {
+  const filterOutPlayersAlreadyInGame = (players: Player[], game: Game) => {
     return players.filter((player) =>
       game.leaderboard.every((entry) => entry.player.id !== player.id)
     );
   };
 
   const getResponse = pipe(
-    args.params.id,
+    params.id,
     validateWithSchemaAsync(GameSchema.shape.id),
     TE.chain((gameId) =>
       runTasksInParallel({
@@ -92,11 +87,13 @@ export const loader = async (args: LoaderArgs) => {
       })
     ),
     TE.map(({ allPlayers, game }) =>
-      rejectPlayersAlreadyInGame(allPlayers, game)
+      filterOutPlayersAlreadyInGame(allPlayers, game)
     ),
     TE.match(
       (error) => {
-        throw new Response("Server error", { status: 500 });
+        throw new Response(`Failed to load players: ${error.message}`, {
+          status: 500,
+        });
       },
       (players) => json({ players })
     )

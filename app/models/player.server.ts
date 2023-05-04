@@ -3,7 +3,8 @@ import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
 import hyperid from "hyperid";
 import { z } from "zod";
-import { validateWithSchemaAsync } from "~/utils";
+import { runTasksArrayInParallel } from "~/utils/generic";
+import { validateWithSchemaAsync } from "~/utils/validation";
 
 export const Schema = z
   .object({
@@ -87,15 +88,9 @@ export const get = (id: Player["id"]) =>
 export const list = () =>
   pipe(
     listRawPlayersFromStorage,
-    TE.chainW(({ keys }) =>
-      pipe(
-        keys,
-        A.map(({ name }) => getRawPlayerFromStorage(name)),
-        A.sequence(TE.ApplicativePar),
-        validateWithSchemaAsync(z.array(Schema)),
-        TE.map((players) =>
-          players.sort((a, b) => a.name.localeCompare(b.name))
-        )
-      )
-    )
+    TE.map((listResult) => listResult.keys),
+    TE.map(A.map(({ name }) => getRawPlayerFromStorage(name))),
+    TE.chainW(runTasksArrayInParallel),
+    TE.chainW(validateWithSchemaAsync(z.array(Schema))),
+    TE.map((players) => players.sort((a, b) => a.name.localeCompare(b.name)))
   );
