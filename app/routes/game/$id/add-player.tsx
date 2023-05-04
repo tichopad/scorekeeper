@@ -46,10 +46,9 @@ export const action = async ({ request, params }: ActionArgs) => {
   );
 
   const getResponse = pipe(
-    runTasksInParallel({
-      gameId: getGameId,
-      formData: getFormData,
-    }),
+    TE.Do,
+    TE.bind("gameId", () => getGameId),
+    TE.bind("formData", () => getFormData),
     TE.map(({ gameId, formData }) =>
       pipe(
         getPlayer(formData.playerId),

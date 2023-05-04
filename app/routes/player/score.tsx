@@ -1,4 +1,4 @@
-import { json, type ActionArgs } from "@remix-run/cloudflare";
+import { type ActionArgs } from "@remix-run/cloudflare";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/lib/function";
 import { z } from "zod";
@@ -26,22 +26,23 @@ export const action = async ({ request }: ActionArgs) => {
   );
 
   const getResponse = pipe(
-    getFormData,
-    TE.map(({ gameId, playerId, score }) =>
-      pipe(
-        getLeaderboardEntry(gameId, playerId),
-        TE.chainW((leaderboardEntry) => {
-          if (Math.abs(score - leaderboardEntry.score) !== 1) {
-            return TE.throwError(new Error("Score can only be incremented"));
-          }
-          if (score === leaderboardEntry.score) {
-            return TE.of(leaderboardEntry);
-          }
-          return updateLeaderboardEntry(gameId, playerId, { score });
-        }),
-        TE.map((leaderboardEntry) => json({ leaderboardEntry }))
-      )
-    )
+    TE.Do,
+    TE.bind("formData", () => getFormData),
+    TE.bind("leaderboardEntry", ({ formData }) =>
+      getLeaderboardEntry(formData.gameId, formData.playerId)
+    ),
+    TE.chainW(({ formData, leaderboardEntry }) => {
+      if (Math.abs(formData.score - leaderboardEntry.score) !== 1) {
+        return TE.throwError(new Error("Score can only be incremented"));
+      }
+      // Score didn't change, so no need to update
+      if (formData.score === leaderboardEntry.score) {
+        return TE.of(leaderboardEntry);
+      }
+      return updateLeaderboardEntry(formData.gameId, formData.playerId, {
+        score: formData.score,
+      });
+    })
   );
 
   return getResponse();
