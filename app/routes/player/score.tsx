@@ -1,50 +1,48 @@
 import { json, type ActionArgs } from "@remix-run/cloudflare";
-import * as E from "fp-ts/Either";
-import type { Game } from "~/models/game.server";
+import * as TE from "fp-ts/TaskEither";
+import { pipe } from "fp-ts/lib/function";
+import { z } from "zod";
 import {
+  Schema as GameSchema,
   getLeaderboardEntry,
   updateLeaderboardEntry,
 } from "~/models/game.server";
-import type { Player } from "~/models/player.server";
-import { assert } from "~/utils";
+import { Schema as PlayerSchema } from "~/models/player.server";
+import { validateFormDataAsync } from "~/utils/validation";
+
+const FormSchema = z.object({
+  gameId: GameSchema.shape.id,
+  playerId: PlayerSchema.shape.id,
+  score: GameSchema.shape.leaderboard.element.shape.score,
+});
 
 export const action = async ({ request }: ActionArgs) => {
-  const formData = await request.formData();
-  const gameId = formData.get("gameId");
-  const playerId = formData.get("playerId");
-  const newScoreRaw = formData.get("score");
-
-  // const x = GameSchema.shape.id.parse(gameId)
-
-  // TODO: asserts into Either
-  assert(gameId && typeof gameId === "string", "Game ID is required");
-  assert(playerId && typeof playerId === "string", "Player ID is required");
-  assert(newScoreRaw && typeof newScoreRaw === "string", "Score is required");
-
-  const newScore = Number(newScoreRaw);
-  assert(!isNaN(newScore), "Score has invalid number format");
-
-  const leaderboardEntry = await getLeaderboardEntry(
-    gameId as Game["id"],
-    playerId as Player["id"]
+  const getFormData = pipe(
+    TE.tryCatch(
+      () => request.formData(),
+      (error) => new Error(`Failed to get form data: ${error}`)
+    ),
+    TE.chain(validateFormDataAsync(FormSchema))
   );
 
-  if (E.isLeft(leaderboardEntry)) return E.throwError(leaderboardEntry);
-
-  if (leaderboardEntry.right.score === newScore) {
-    return json({ leaderboardEntry });
-  }
-
-  assert(
-    Math.abs(newScore - leaderboardEntry.right.score) === 1,
-    "Score can only be incremented"
+  const getResponse = pipe(
+    getFormData,
+    TE.map(({ gameId, playerId, score }) =>
+      pipe(
+        getLeaderboardEntry(gameId, playerId),
+        TE.chainW((leaderboardEntry) => {
+          if (Math.abs(score - leaderboardEntry.score) !== 1) {
+            return TE.throwError(new Error("Score can only be incremented"));
+          }
+          if (score === leaderboardEntry.score) {
+            return TE.of(leaderboardEntry);
+          }
+          return updateLeaderboardEntry(gameId, playerId, { score });
+        }),
+        TE.map((leaderboardEntry) => json({ leaderboardEntry }))
+      )
+    )
   );
 
-  const updatedLeaderboardEntry = await updateLeaderboardEntry(
-    gameId as Game["id"],
-    playerId as Player["id"],
-    { score: newScore }
-  );
-
-  return json({ leaderboardEntry: updatedLeaderboardEntry });
+  return getResponse();
 };
